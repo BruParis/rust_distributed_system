@@ -1,0 +1,13 @@
+[package]
+name = "echo_server"
+version = "0.1.0"
+authors = ["BruParis <parisbruno85@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+crossbeam = "0.8.2"
+maelstrom-common = "0.1.1"
+serde = { version  = "1.0.160", features = ["derive"] }
+serde_json = "1.0.95"

@@ -1,0 +1,31 @@
+{"src": "c1","dest": "n1","body": {"msg_id": 1,"type": "init","node_id": "n1","node_ids": ["n1"]}}
+{"src":"c3","dest":"n1","body":{"type":"echo","echo":"Please echo 105","msg_id":1}}
+
+ ../maelstrom test -w echo --bin target/debug/echo_server --nodes n1 --time-limit 5 --log-stderr
+ ../maelstrom test -w broadcast --bin target/debug/broadcast --time-limit 5 --log-stderr
+
+{"id": 25, "src":"c13","dest":"n1","body":{"type":"read","msg_id":1}}
+ {"id":54,"src":"c16","dest":"n1","body":{"type":"broadcast","message":14,"msg_id":2}}
+
+# BROADCAST
+../maelstrom test -w broadcast --bin target/debug/broadcast --time-limit 20 --nemesis partition
+
+## CRDT
+# GSet
+../maelstrom test -w g-set --bin target/debug/gset --time-limit 10
+../maelstrom test -w g-set --bin target/debug/gset --time-limit 30 --rate 10 --nemesis partition
+
+# PNCounter
+../maelstrom test -w pn-counter --bin target/debug/pn_counter --time-limit 20 --rate 10
+
+## Datomic
+# TXN
+ ../maelstrom test -w txn-list-append --bin target/debug/datomic --time-limit 10 --log-stderr --node-count 1
+../maelstrom test -w txn-list-append --bin target/debug/datomic --time-limit 30 --node-count 1 --concurrency 10n --rate 100
+
+# Shared state
+../maelstrom test -w txn-list-append --bin target/debug/datomic --time-limit 10 --node-count 2
+../maelstrom test -w txn-list-append --bin target/debug/datomic --time-limit 10 --node-count 2 --rate 100
+
+# Raft
+../maelstrom test -w lin-kv --bin target/debug/raft --time-limit 10 --rate 10 --node-count 1 --concurrency 2n
