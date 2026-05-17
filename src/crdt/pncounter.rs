@@ -62,6 +62,95 @@ impl PNCounter {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crdt::crdt::{CrdtData, CrdtElem, CrdtTrait};
+
+    fn nodes(ns: &[&str]) -> HashSet<String> {
+        ns.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn extract(data: CrdtData) -> (HashMap<String, i64>, HashMap<String, i64>) {
+        match data {
+            CrdtData::PNCounterData(d) => d,
+            _ => panic!("Expected PNCounterData"),
+        }
+    }
+
+    #[test]
+    fn test_increment_positive() {
+        let c = PNCounter::new(&nodes(&["n1"]));
+        c.add(CrdtElem::PNCounterDelta("n1".to_string(), 5));
+        assert_eq!(c.read_json(), serde_json::json!(5));
+    }
+
+    #[test]
+    fn test_decrement_negative() {
+        let c = PNCounter::new(&nodes(&["n1"]));
+        c.add(CrdtElem::PNCounterDelta("n1".to_string(), 10));
+        c.add(CrdtElem::PNCounterDelta("n1".to_string(), -3));
+        assert_eq!(c.read_json(), serde_json::json!(7));
+    }
+
+    #[test]
+    fn test_incr_and_decr_tracked_separately() {
+        let c = PNCounter::new(&nodes(&["n1"]));
+        c.add(CrdtElem::PNCounterDelta("n1".to_string(), 10));
+        c.add(CrdtElem::PNCounterDelta("n1".to_string(), -4));
+        let (incr, decr) = extract(c.data());
+        assert_eq!(*incr.get("n1").unwrap(), 10);
+        assert_eq!(*decr.get("n1").unwrap(), -4);
+    }
+
+    #[test]
+    fn test_merge_accumulates_across_nodes() {
+        let n1 = PNCounter::new(&nodes(&["n1", "n2"]));
+        n1.add(CrdtElem::PNCounterDelta("n1".to_string(), 5));
+
+        let n2 = PNCounter::new(&nodes(&["n1", "n2"]));
+        n2.add(CrdtElem::PNCounterDelta("n2".to_string(), 3));
+
+        n1.merge(n2.data());
+        assert_eq!(n1.read_json(), serde_json::json!(8));
+    }
+
+    #[test]
+    fn test_merge_idempotency() {
+        let c = PNCounter::new(&nodes(&["n1"]));
+        c.add(CrdtElem::PNCounterDelta("n1".to_string(), 7));
+        c.add(CrdtElem::PNCounterDelta("n1".to_string(), -2));
+        let snapshot = c.data();
+        c.merge(snapshot);
+        assert_eq!(c.read_json(), serde_json::json!(5));
+    }
+
+    #[test]
+    fn test_merge_commutativity() {
+        let a = PNCounter::new(&nodes(&["n1", "n2"]));
+        a.add(CrdtElem::PNCounterDelta("n1".to_string(), 5));
+        a.add(CrdtElem::PNCounterDelta("n1".to_string(), -1));
+
+        let b = PNCounter::new(&nodes(&["n1", "n2"]));
+        b.add(CrdtElem::PNCounterDelta("n2".to_string(), 3));
+        b.add(CrdtElem::PNCounterDelta("n2".to_string(), -2));
+
+        // a merge b
+        let ab = PNCounter::new(&nodes(&["n1", "n2"]));
+        ab.add(CrdtElem::PNCounterDelta("n1".to_string(), 5));
+        ab.add(CrdtElem::PNCounterDelta("n1".to_string(), -1));
+        ab.merge(b.data());
+
+        // b merge a
+        let ba = PNCounter::new(&nodes(&["n1", "n2"]));
+        ba.add(CrdtElem::PNCounterDelta("n2".to_string(), 3));
+        ba.add(CrdtElem::PNCounterDelta("n2".to_string(), -2));
+        ba.merge(a.data());
+
+        assert_eq!(ab.read_json(), ba.read_json());
+    }
+}
+
 impl CrdtTrait for PNCounter {
     fn new(neighbors: &HashSet<String>) -> Self {
         let map: HashMap<String, i64> = neighbors

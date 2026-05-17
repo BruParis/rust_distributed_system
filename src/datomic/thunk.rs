@@ -203,3 +203,59 @@ impl<'de, V: Clone + ThunkTrait> Deserialize<'de> for Thunk<V> {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_thunk_new_id_format() {
+        let t: Thunk<ThunkValues> = Thunk::new("n1".to_string(), 3, vec![]);
+        assert_eq!(t.id, "n1-3");
+    }
+
+    #[test]
+    fn test_thunk_new_not_saved() {
+        let t: Thunk<ThunkValues> = Thunk::new("n1".to_string(), 0, vec![]);
+        assert!(!t.saved);
+    }
+
+    #[test]
+    fn test_thunk_from_id_is_saved() {
+        let t: Thunk<ThunkValues> = Thunk::from_id("n2-7".to_string());
+        assert_eq!(t.id, "n2-7");
+        assert!(t.saved);
+    }
+
+    #[test]
+    fn test_thunk_serializes_to_id_string() {
+        let t: Thunk<ThunkValues> = Thunk::new("n3".to_string(), 5, vec![1, 2]);
+        let json = serde_json::to_string(&t).unwrap();
+        assert_eq!(json, "\"n3-5\"");
+    }
+
+    #[test]
+    fn test_thunk_deserializes_from_id_string() {
+        let t: Thunk<ThunkValues> = serde_json::from_str("\"n1-42\"").unwrap();
+        assert_eq!(t.id, "n1-42");
+        assert!(!t.saved);
+    }
+
+    #[test]
+    fn test_thunk_serde_roundtrip_preserves_id() {
+        let original: Thunk<ThunkValues> = Thunk::new("n0".to_string(), 99, vec![]);
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: Thunk<ThunkValues> = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(original.id, deserialized.id);
+    }
+
+    #[test]
+    fn test_thunk_map_serializes_ids() {
+        let mut map: ThunkMap = HashMap::new();
+        map.insert(1, Thunk::new("n1".to_string(), 0, vec![]));
+        map.insert(2, Thunk::from_id("n2-5".to_string()));
+        let json = serde_json::to_value(&ThunkWriteEnum::Map(&map)).unwrap();
+        assert_eq!(json["1"], serde_json::json!("n1-0"));
+        assert_eq!(json["2"], serde_json::json!("n2-5"));
+    }
+}

@@ -106,3 +106,78 @@ impl<'de> Deserialize<'de> for TxnOp {
         deserializer.deserialize_seq(TxnOpVisitor)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_read_op_serializes_to_array() {
+        let op = TxnOp::Read(TxnReadOp::new(1, vec![10, 20]));
+        let json = serde_json::to_value(&op).unwrap();
+        assert_eq!(json, serde_json::json!(["r", 1, [10, 20]]));
+    }
+
+    #[test]
+    fn test_append_op_serializes_to_array() {
+        let op = TxnOp::Append(TxnAppendOp::new(2, 42));
+        let json = serde_json::to_value(&op).unwrap();
+        assert_eq!(json, serde_json::json!(["append", 2, 42]));
+    }
+
+    #[test]
+    fn test_read_op_deserializes_with_value() {
+        let json = r#"["r", 3, [1, 2, 3]]"#;
+        let op: TxnOp = serde_json::from_str(json).unwrap();
+        if let TxnOp::Read(r) = op {
+            assert_eq!(r.key, 3);
+            assert_eq!(r.value, vec![1, 2, 3]);
+        } else {
+            panic!("Expected Read op");
+        }
+    }
+
+    #[test]
+    fn test_read_op_deserializes_with_null() {
+        // Maelstrom sends null for keys with no stored value
+        let json = r#"["r", 5, null]"#;
+        let op: TxnOp = serde_json::from_str(json).unwrap();
+        if let TxnOp::Read(r) = op {
+            assert_eq!(r.value, Vec::<usize>::new());
+        } else {
+            panic!("Expected Read op");
+        }
+    }
+
+    #[test]
+    fn test_append_op_roundtrip() {
+        let original = TxnOp::Append(TxnAppendOp::new(7, 99));
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: TxnOp = serde_json::from_str(&serialized).unwrap();
+        if let TxnOp::Append(a) = deserialized {
+            assert_eq!(a.key, 7);
+            assert_eq!(a.value, 99);
+        } else {
+            panic!("Expected Append op");
+        }
+    }
+
+    #[test]
+    fn test_read_op_roundtrip() {
+        let original = TxnOp::Read(TxnReadOp::new(4, vec![5, 6, 7]));
+        let serialized = serde_json::to_string(&original).unwrap();
+        let deserialized: TxnOp = serde_json::from_str(&serialized).unwrap();
+        if let TxnOp::Read(r) = deserialized {
+            assert_eq!(r.key, 4);
+            assert_eq!(r.value, vec![5, 6, 7]);
+        } else {
+            panic!("Expected Read op");
+        }
+    }
+
+    #[test]
+    fn test_get_key() {
+        assert_eq!(TxnOp::Read(TxnReadOp::new(3, vec![])).get_key(), 3);
+        assert_eq!(TxnOp::Append(TxnAppendOp::new(9, 1)).get_key(), 9);
+    }
+}
